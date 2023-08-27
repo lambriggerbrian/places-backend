@@ -1,7 +1,10 @@
 const axios = require("axios");
+const dotenv = require("dotenv");
+dotenv.config();
+
 const HttpError = require("../models/http-error");
 
-const API_KEY = "AIzaSyBphdgsGrQ-6q7PMgKfpSbdR0Cn6l1xFhw";
+const API_KEY = process.env.GOOGLE_API_KEY;
 const GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode";
 
 async function getCoordinatesByAddress(address) {
