@@ -36,3 +36,5 @@ Requires Docker and the Docker-Compose tool, create your .env file and then exec
 
 #### Devcontainer
 Requires a supported tool like Visual Studio Code, IntelliJ Idea, Dev Container CLI. Instructions vary per tool, but the devcontainer definition files live in the .devcontainer folder.
+
+Do note that the devcontainer forwards ports 5000 (default LISTEN_PORT for backend server) and port 27017 (default MongoDB port) so you may need to change if your environment is different.
