@@ -1,7 +1,7 @@
 {
   "name": "places-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "A Node.JS backend server for the Places App MERN stack.",
   "main": "index.js",
   "scripts": {
     "start": "nodemon -L app.js",

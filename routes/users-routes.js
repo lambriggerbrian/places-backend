@@ -5,6 +5,7 @@ const {
   getUsers,
   postUser,
   postLogin,
+  deleteUserByUserId,
 } = require("../controllers/users-controller");
 
 const router = express.Router();
@@ -29,5 +30,7 @@ router.post(
   ],
   postLogin
 );
+
+router.delete("/:userId", deleteUserByUserId);
 
 module.exports = router;

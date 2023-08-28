@@ -1,7 +1,9 @@
-const { matchedData, validationResult, check } = require("express-validator");
+const { matchedData, validationResult } = require("express-validator");
+const mongoose = require("mongoose");
 
 const HttpError = require("../models/http-error");
 const User = require("../models/user");
+const Place = require("../models/place");
 
 const checkValidation = (req, next) => {
   const errors = validationResult(req);
@@ -47,7 +49,12 @@ const postUser = async (req, res, next) => {
   try {
     const existingUser = await User.findOne({ email }).exec();
     if (existingUser) {
-      return next(new HttpError("User with email already exists", 422));
+      return next(
+        new HttpError(
+          "User with email already exists, please login instead",
+          422
+        )
+      );
     }
     const newUser = User({
       name,
@@ -78,7 +85,40 @@ const postLogin = async (req, res, next) => {
   }
 };
 
+const deleteUserByUserId = async (req, res, next) => {
+  const userId = req.params.userId;
+
+  // Find the user to delete and its places
+  let user;
+  try {
+    user = await User.findById(userId).populate("places").exec();
+    if (!user) {
+      return next(new HttpError("Could not find user to delete", 404));
+    }
+  } catch (error) {
+    // Pass errors specific to finding the user
+    return next(error);
+  }
+
+  // Delete the user and its places
+  try {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    for (const place of user.places) {
+      place.deleteOne({ session });
+    }
+    //await Place.deleteMany({ creator: userId }, { session });
+    await user.deleteOne({ session });
+    await session.commitTransaction();
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.log(error);
+    return next(new HttpError("Could not delete user", 500));
+  }
+};
+
 exports.findUserByUserId = findUserByUserId;
 exports.getUsers = getUsers;
 exports.postUser = postUser;
 exports.postLogin = postLogin;
+exports.deleteUserByUserId = deleteUserByUserId;
