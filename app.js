@@ -1,6 +1,8 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
+const fs = require("fs");
+const path = require("path");
 
 const placesRoutes = require("./routes/places-routes");
 const usersRoutes = require("./routes/users-routes");
@@ -14,7 +16,7 @@ dotenvExpand.expand(dotenv.config());
 const app = express();
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
@@ -25,6 +27,11 @@ app.use((req, res, next) => {
 });
 
 app.use(bodyParser.json());
+
+app.use(
+  path.normalize(`/${process.env.IMAGES_DIR}`),
+  express.static(path.normalize(`${process.env.IMAGES_DIR}`))
+);
 
 // Register routes
 app.use("/api/places", placesRoutes); // => /api/places/...
@@ -38,6 +45,11 @@ app.use((req, res, next) => {
 
 // Default error handler
 app.use((error, req, res, next) => {
+  if (req.file) {
+    fs.unlink(req.file.path, (err) => {
+      console.log(`File ${req.file.path} deleted.`);
+    });
+  }
   if (res.headersSent) {
     return next(error);
   }

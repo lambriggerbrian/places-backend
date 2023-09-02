@@ -1,3 +1,6 @@
+# Default uploads dir
+uploads
+
 # Logs
 logs
 *.log

@@ -1,5 +1,7 @@
 const express = require("express");
 const { check } = require("express-validator");
+const fileUpload = require("../middleware/file-upload");
+const checkAuth = require("../middleware/check-auth");
 
 const {
   getUsers,
@@ -14,6 +16,7 @@ router.get("/", getUsers);
 
 router.post(
   "/signup",
+  fileUpload.single("image"),
   [
     check("name").notEmpty(),
     check("email").normalizeEmail().isEmail(),
@@ -30,6 +33,8 @@ router.post(
   ],
   postLogin
 );
+
+router.use(checkAuth);
 
 router.delete("/:userId", deleteUserByUserId);
 

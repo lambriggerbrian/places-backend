@@ -5,6 +5,7 @@ const getCoordinatesByAddress = require("../util/location");
 const { findUserByUserId } = require("./users-controller");
 const Place = require("../models/place");
 const User = require("../models/user");
+const fs = require("fs");
 
 const findPlaceByPlaceId = async (placeId) => {
   try {
@@ -31,11 +32,18 @@ const getPlaceByPlaceId = async (req, res, next) => {
 
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.userId;
+
+  try {
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      throw new HttpError("No user with that userid found", 404);
+    }
+  } catch (error) {
+    return next(error);
+  }
+
   try {
     const places = await Place.find({ creator: userId }).exec();
-    if (places.length === 0) {
-      return next(new HttpError("Could not find places for provided user id", 404));
-    }
     res.json({
       count: places.length,
       places: places.map((place) => place.toObject({ getters: true })),
@@ -50,9 +58,11 @@ const getPlacesByUserIdPopulate = async (req, res, next) => {
   const userId = req.params.userId;
   try {
     const user = await User.findById(userId).populate("places");
-    const places = user.places
+    const places = user.places;
     if (places.length === 0) {
-      return next(new HttpError("Could not find places for provided user id", 404));
+      return next(
+        new HttpError("Could not find places for provided user id", 404)
+      );
     }
     res.json({
       count: places.length,
@@ -67,9 +77,11 @@ const getPlacesByUserIdPopulate = async (req, res, next) => {
 const postPlace = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log(errors);
     return next(new HttpError("Invalid input", 422));
   }
   const { title, description, address, creator } = matchedData(req);
+  const image = req.file.path;
 
   // Get creator exists as user model
   let user;
@@ -95,7 +107,7 @@ const postPlace = async (req, res, next) => {
     description,
     address,
     location: coordinates,
-    image: "https://dummyimage.com/600x400/000/fff",
+    image,
     creator,
   });
   user.places.push(newPlace);
@@ -146,25 +158,29 @@ const deletePlaceById = async (req, res, next) => {
   const placeId = req.params.placeId;
 
   // Find the place to delete and its creator
-  let place,user;
+  let place, user;
   try {
-    place = await Place.findById(placeId).populate('creator');
+    place = await Place.findById(placeId).populate("creator");
     user = place.creator;
     // Remove place reference from its creator
-    user.places.pull(placeId)
+    user.places.pull(placeId);
   } catch (error) {
     // Pass errors specific to finding the place
     return next(error);
   }
 
-  
+  const imagePath = place.image;
+
   // Delete the place
   try {
     const session = await mongoose.startSession();
     session.startTransaction();
-    await place.deleteOne({session});
-    await user.save({session});
+    await place.deleteOne({ session });
+    await user.save({ session });
     await session.commitTransaction();
+    fs.unlink(imagePath, (err) => {
+      console.log(`File ${imagePath} deleted.`);
+    });
     res.json({ message: "Place deleted successfully" });
   } catch (error) {
     return next(new HttpError("Could not delete place", 500));
