@@ -32,16 +32,16 @@ const getPlaceByPlaceId = async (req, res, next) => {
 
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.userId;
-
+  // Verify userId exists
   try {
     const user = await User.findById(userId).exec();
     if (!user) {
-      throw new HttpError("No user with that userid found", 404);
+      throw new HttpError("No user with that userId found", 404);
     }
   } catch (error) {
     return next(error);
   }
-
+  // Get places for the userId
   try {
     const places = await Place.find({ creator: userId }).exec();
     res.json({
@@ -80,18 +80,17 @@ const postPlace = async (req, res, next) => {
     console.log(errors);
     return next(new HttpError("Invalid input", 422));
   }
-  const { title, description, address, creator } = matchedData(req);
+  const { title, description, address } = matchedData(req);
+  const userId = req.userData.userId;
   const image = req.file.path;
-
   // Get creator exists as user model
   let user;
   try {
-    user = await findUserByUserId(creator);
+    user = await User.findById(userId);
   } catch (error) {
     console.log(error);
     return next(new HttpError("Could not find creator by user id"), 422);
   }
-
   // Get coordinates of address
   let coordinates;
   try {
@@ -100,7 +99,6 @@ const postPlace = async (req, res, next) => {
     console.log(error);
     return next(new HttpError("Could not get coordinates for address"));
   }
-
   // Create place model
   const newPlace = new Place({
     title,
@@ -108,10 +106,9 @@ const postPlace = async (req, res, next) => {
     address,
     location: coordinates,
     image,
-    creator,
+    creator: userId,
   });
   user.places.push(newPlace);
-
   // Commit transaction
   try {
     const session = await mongoose.startSession();
@@ -132,17 +129,20 @@ const patchPlaceByPlaceId = async (req, res, next) => {
     return next(new HttpError("Invalid input", 422));
   }
   const { title, description } = matchedData(req);
-
   // Find the place to patch
   const placeId = req.params.placeId;
   let place;
   try {
-    place = await findPlaceByPlaceId(placeId);
+    place = await Place.findById(placeId);
+    if (place.creator !== req.userData.userId) {
+      return next(
+        new HttpError("User is not authorized to edit this place.", 401)
+      );
+    }
   } catch (error) {
-    // Pass errors specific to finding the place
     return next(error);
   }
-
+  // Update place values
   try {
     place.title = title;
     place.description = description;
@@ -156,21 +156,24 @@ const patchPlaceByPlaceId = async (req, res, next) => {
 
 const deletePlaceById = async (req, res, next) => {
   const placeId = req.params.placeId;
-
+  const userId = req.userData.userId;
   // Find the place to delete and its creator
-  let place, user;
+  let place, user, imagePath;
   try {
     place = await Place.findById(placeId).populate("creator");
     user = place.creator;
+    imagePath = place.image;
+    if (user.id !== userId) {
+      return next(
+        new HttpError("User is not authorized to delete this place.", 401)
+      );
+    }
     // Remove place reference from its creator
     user.places.pull(placeId);
   } catch (error) {
     // Pass errors specific to finding the place
     return next(error);
   }
-
-  const imagePath = place.image;
-
   // Delete the place
   try {
     const session = await mongoose.startSession();

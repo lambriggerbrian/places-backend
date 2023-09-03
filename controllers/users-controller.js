@@ -2,6 +2,9 @@ const { matchedData, validationResult } = require("express-validator");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const dayjs = require("dayjs");
+const utc = require("dayjs/plugin/utc");
+dayjs.extend(utc);
 const fs = require("fs");
 
 const HttpError = require("../models/http-error");
@@ -32,10 +35,20 @@ const findUserByUserId = async (userId) => {
 const generateToken = async (user) => {
   const { TOKEN_SECRET, TOKEN_EXPIRY } = process.env;
   try {
-    return jwt.sign({ userId: user.id, email: user.email }, TOKEN_SECRET, {
-      expiresIn: TOKEN_EXPIRY || "1h",
-    });
-  } catch {
+    const expiresIn = TOKEN_EXPIRY || "1h";
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      TOKEN_SECRET,
+      { expiresIn }
+    );
+    const regex = /(\d+)([dwMyhms])/;
+    const matchTime = expiresIn.match(regex);
+    const value = parseInt(matchTime[1]);
+    const duration = matchTime[2];
+    const expireDate = dayjs.utc().add(value, duration).toISOString();
+    return { token, expireDate };
+  } catch (error) {
+    console.log(error);
     throw new HttpError("Could not generate token for user.", 500);
   }
 };
@@ -94,14 +107,16 @@ const postUser = async (req, res, next) => {
     });
     await newUser.save();
     // Generate token and respond
-    const token = await generateToken(newUser);
+    const { token, expireDate } = await generateToken(newUser);
     res.status(201).json({
       message: "User created",
       userId: newUser.id,
       email: newUser.email,
       token,
+      expireDate,
     });
   } catch (error) {
+    console.log(error);
     return next(new HttpError("Could not create user, please try again.", 500));
   }
 };
@@ -120,17 +135,19 @@ const postLogin = async (req, res, next) => {
     // Validate password
     let isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      return next(new HttpError("Invalid credentials, could not log in.", 401));
+      return next(new HttpError("Invalid credentials, could not log in.", 403));
     }
     // Generate token and respond
-    const token = await generateToken(user);
+    const { token, expireDate } = await generateToken(user);
     res.json({
       message: "Login successful",
       userId: user.id,
       email: user.email,
       token,
+      expireDate,
     });
   } catch (error) {
+    console.log(error);
     return next(
       new HttpError(
         "Could not login, please check your credentials and try again.",
